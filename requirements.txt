@@ -3,4 +3,4 @@ pandas
 requests
 snowflake-snowpark-python==1.18.0
 snowflake-connector-python
-setuptools
+setuptools==69.5.1
