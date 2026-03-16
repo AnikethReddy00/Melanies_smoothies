@@ -1,19 +1,19 @@
 # Import python packages
 import streamlit as st
 import pandas as pd
-# from snowflake.snowpark.context import get_active_session
-from snowflake.snowpark.functions import col
 import requests
+from snowflake.snowpark.functions import col
 
-# Write directly to the app
+# Title
 st.title("Customize Your Smoothie :cup_with_straw:")
 
 st.write(
-    """
-    Choose the fruits you want in your custom Smoothie!
-    """
+"""
+Choose the fruits you want in your custom Smoothie!
+"""
 )
 
+# Name input
 name_on_order = st.text_input("Name on Smoothie:")
 st.write("The name on your smoothie will be:", name_on_order)
 
@@ -24,7 +24,7 @@ session = cnx.session()
 # Get fruit options table
 my_dataframe = (
     session.table("smoothies.public.fruit_options")
-    .select(col("FRUIT_NAME"), col("SEARCH_ON"))
+    .select(col("FRUIT_NAME"))
 )
 
 # Convert to pandas dataframe
@@ -33,7 +33,7 @@ pd_df = my_dataframe.to_pandas()
 # Multiselect for ingredients
 ingredients_list = st.multiselect(
     "Choose upto 5 ingredients:",
-    my_dataframe,
+    pd_df["FRUIT_NAME"].tolist(),
     max_selections=5
 )
 
@@ -42,29 +42,34 @@ if ingredients_list:
     ingredients_string = ""
 
     for fruit_chosen in ingredients_list:
+
         ingredients_string += fruit_chosen + " "
 
-        search_on = pd_df.loc[
-            pd_df["FRUIT_NAME"] == fruit_chosen, "SEARCH_ON"
-        ].iloc[0]
+        search_on = fruit_chosen.lower()
 
-        st.write("The search value for", fruit_chosen, "is", search_on, ".")
+        st.write("The search value for", fruit_chosen, "is", search_on)
 
-        st.subheader(fruit_chosen + " Nutrition Information")
+        st.subheader(f"{fruit_chosen} Nutrition Information")
 
+        # API request
         smoothiefroot_response = requests.get(
             f"https://my.smoothiefroot.com/api/fruit/{search_on}"
         )
 
-        sf_df = st.dataframe(
-            data=smoothiefroot_response.json(),
+        # Convert API response to dataframe
+        nutrition_df = pd.json_normalize(
+            smoothiefroot_response.json()
+        )
+
+        st.dataframe(
+            data=nutrition_df,
             use_container_width=True
         )
 
     # Insert statement
-    my_insert_stmt = """
+    my_insert_stmt = f"""
         INSERT INTO smoothies.public.orders (ingredients, name_on_order)
-        VALUES ('""" + ingredients_string + """', '""" + name_on_order + """')
+        VALUES ('{ingredients_string}', '{name_on_order}')
     """
 
     st.write(my_insert_stmt)
@@ -73,4 +78,8 @@ if ingredients_list:
 
     if time_to_insert:
         session.sql(my_insert_stmt).collect()
-        st.success(f"Your Smoothie is ordered, {name_on_order}!", icon="✅")
+
+        st.success(
+            f"Your Smoothie is ordered, {name_on_order}!",
+            icon="✅"
+        )
